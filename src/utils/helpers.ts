@@ -197,3 +197,105 @@ export const generateBarcodePattern = (code: string): string[] => {
   widths.push('w-1.5 bg-black', 'w-0.5 bg-white', 'w-1 bg-black');
   return widths;
 };
+
+// Sales aggregation for Day, Week, Month
+export interface PeriodSalesSummary {
+  revenue: number;
+  ordersCount: number;
+  itemsSoldCount: number;
+  totalCost: number;
+  grossProfit: number;
+  grossMarginPercent: number;
+  taxTotal: number;
+  discountTotal: number;
+  avgOrderValue: number;
+  bills: SaleBill[];
+}
+
+export const isSameDay = (date1: Date, date2: Date): boolean => {
+  return (
+    date1.getFullYear() === date2.getFullYear() &&
+    date1.getMonth() === date2.getMonth() &&
+    date1.getDate() === date2.getDate()
+  );
+};
+
+export const isWithinDays = (date: Date, referenceDate: Date, days: number): boolean => {
+  const diffTime = referenceDate.getTime() - date.getTime();
+  const diffDays = diffTime / (1000 * 60 * 60 * 24);
+  return diffDays >= 0 && diffDays <= days;
+};
+
+export const isSameMonth = (date1: Date, date2: Date): boolean => {
+  return (
+    date1.getFullYear() === date2.getFullYear() &&
+    date1.getMonth() === date2.getMonth()
+  );
+};
+
+export const calculateSalesSummary = (bills: SaleBill[]): PeriodSalesSummary => {
+  let revenue = 0;
+  let itemsSoldCount = 0;
+  let totalCost = 0;
+  let taxTotal = 0;
+  let discountTotal = 0;
+
+  bills.forEach((bill) => {
+    revenue += bill.grandTotal;
+    taxTotal += bill.taxTotal || 0;
+    discountTotal += bill.discountTotal || 0;
+
+    bill.items.forEach((item) => {
+      itemsSoldCount += item.quantity;
+      const unitCost = item.product.costPrice || 0;
+      totalCost += unitCost * item.quantity;
+    });
+  });
+
+  const ordersCount = bills.length;
+  const grossProfit = Number((revenue - totalCost).toFixed(2));
+  const grossMarginPercent = revenue > 0 ? Number(((grossProfit / revenue) * 100).toFixed(1)) : 0;
+  const avgOrderValue = ordersCount > 0 ? Number((revenue / ordersCount).toFixed(2)) : 0;
+
+  return {
+    revenue: Number(revenue.toFixed(2)),
+    ordersCount,
+    itemsSoldCount: Number(itemsSoldCount.toFixed(2)),
+    totalCost: Number(totalCost.toFixed(2)),
+    grossProfit,
+    grossMarginPercent,
+    taxTotal: Number(taxTotal.toFixed(2)),
+    discountTotal: Number(discountTotal.toFixed(2)),
+    avgOrderValue,
+    bills,
+  };
+};
+
+export const getSalesByPeriods = (allSales: SaleBill[], customNow?: Date) => {
+  const now = customNow || new Date();
+
+  // Today (Day)
+  const todayBills = allSales.filter((s) => {
+    const d = new Date(s.createdAt);
+    return isSameDay(d, now);
+  });
+
+  // This Week (Last 7 Days)
+  const weekBills = allSales.filter((s) => {
+    const d = new Date(s.createdAt);
+    return isWithinDays(d, now, 7);
+  });
+
+  // This Month (Current calendar month or within 30 days)
+  const monthBills = allSales.filter((s) => {
+    const d = new Date(s.createdAt);
+    return isSameMonth(d, now) || isWithinDays(d, now, 30);
+  });
+
+  return {
+    today: calculateSalesSummary(todayBills),
+    week: calculateSalesSummary(weekBills),
+    month: calculateSalesSummary(monthBills),
+    all: calculateSalesSummary(allSales),
+  };
+};

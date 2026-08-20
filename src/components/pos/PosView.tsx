@@ -24,6 +24,9 @@ import { BarcodeScannerModal } from '../common/BarcodeScannerModal';
 import { PaymentModal } from './PaymentModal';
 import { HoldCartsModal } from './HoldCartsModal';
 import { ReceiptModal } from '../common/ReceiptModal';
+import { QuickRestockModal } from '../inventory/QuickRestockModal';
+import { SalesPeriodModal } from '../common/SalesPeriodModal';
+import { PackagePlus, TrendingUp } from 'lucide-react';
 
 const CATEGORIES: ('All' | ProductCategory)[] = [
   'All',
@@ -52,6 +55,7 @@ export const PosView: React.FC = () => {
     parkCurrentCart,
     parkedCarts,
     settings,
+    salesSummary,
   } = useStore();
 
   const [selectedCategory, setSelectedCategory] = useState<'All' | ProductCategory>('All');
@@ -62,6 +66,8 @@ export const PosView: React.FC = () => {
   const [completedBill, setCompletedBill] = useState<SaleBill | null>(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [activeCustomer, setActiveCustomer] = useState({ name: '', phone: '' });
+  const [restockProduct, setRestockProduct] = useState<Product | null>(null);
+  const [salesPeriodModalPeriod, setSalesPeriodModalPeriod] = useState<'today' | 'week' | 'month' | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -131,8 +137,59 @@ export const PosView: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-3 sm:p-5">
-      {/* Top Banner / Quick Action Bar */}
+    <div className="max-w-7xl mx-auto p-3 sm:p-5 space-y-4">
+      {/* Top Sales of Day, Week, Month Quick Overview Bar */}
+      <div className="bg-slate-900 text-white rounded-2xl p-3 sm:p-3.5 border border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center space-x-2.5">
+          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+            <TrendingUp className="w-4 h-4" />
+          </div>
+          <div>
+            <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+              Total Sales Overview
+            </h4>
+            <span className="text-[11px] text-slate-400">Click any card to inspect sales, tenders & print invoices</span>
+          </div>
+        </div>
+
+        {/* Quick Period Buttons */}
+        <div className="grid grid-cols-3 gap-2 text-xs">
+          <button
+            onClick={() => setSalesPeriodModalPeriod('today')}
+            className="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-left transition-all hover:scale-[1.02]"
+          >
+            <span className="text-[10px] text-emerald-400 font-bold block uppercase tracking-wider">Day (Today)</span>
+            <span className="text-sm font-black text-white block">
+              {formatCurrency(salesSummary.today.revenue, settings.currencySymbol)}
+            </span>
+            <span className="text-[9px] text-slate-400 font-medium">{salesSummary.today.ordersCount} sales</span>
+          </button>
+
+          <button
+            onClick={() => setSalesPeriodModalPeriod('week')}
+            className="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-left transition-all hover:scale-[1.02]"
+          >
+            <span className="text-[10px] text-indigo-400 font-bold block uppercase tracking-wider">This Week</span>
+            <span className="text-sm font-black text-white block">
+              {formatCurrency(salesSummary.week.revenue, settings.currencySymbol)}
+            </span>
+            <span className="text-[9px] text-slate-400 font-medium">{salesSummary.week.ordersCount} sales</span>
+          </button>
+
+          <button
+            onClick={() => setSalesPeriodModalPeriod('month')}
+            className="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-left transition-all hover:scale-[1.02]"
+          >
+            <span className="text-[10px] text-amber-400 font-bold block uppercase tracking-wider">This Month</span>
+            <span className="text-sm font-black text-white block">
+              {formatCurrency(salesSummary.month.revenue, settings.currencySymbol)}
+            </span>
+            <span className="text-[9px] text-slate-400 font-medium">{salesSummary.month.ordersCount} sales</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main POS Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         
         {/* LEFT COLUMN: Product Catalog & Fast Search (8 cols on desktop) */}
@@ -193,8 +250,8 @@ export const PosView: React.FC = () => {
             })}
           </div>
 
-          {/* Products Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[calc(100vh-270px)] overflow-y-auto pr-1">
+          {/* Products Grid with Stock Indicators and Quick Restock */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 max-h-[calc(100vh-320px)] overflow-y-auto pr-1">
             {filteredProducts.length === 0 ? (
               <div className="col-span-full py-16 text-center text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">
                 <ShoppingBag className="w-10 h-10 mx-auto mb-2 text-slate-300" />
@@ -209,11 +266,10 @@ export const PosView: React.FC = () => {
                 return (
                   <div
                     key={product.id}
-                    onClick={() => !isOut && addToCart(product)}
                     className={`bg-white rounded-2xl p-3 border transition-all flex flex-col justify-between relative group select-none ${
                       isOut
-                        ? 'border-slate-200 opacity-50 bg-slate-50 cursor-not-allowed'
-                        : 'border-slate-200/80 hover:border-emerald-400 hover:shadow-md cursor-pointer hover:-translate-y-0.5'
+                        ? 'border-slate-200 bg-slate-50/70'
+                        : 'border-slate-200/80 hover:border-emerald-400 hover:shadow-md'
                     }`}
                   >
                     {/* Status Badge */}
@@ -223,21 +279,24 @@ export const PosView: React.FC = () => {
                       </span>
                       {isOut ? (
                         <span className="text-[9px] font-black uppercase bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded">
-                          Out
+                          0 Left
                         </span>
                       ) : isLow ? (
                         <span className="text-[9px] font-black uppercase bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
-                          Low: {product.stock}
+                          Low: {product.stock} {product.unit}
                         </span>
                       ) : (
-                        <span className="text-[9px] font-bold text-slate-400">
+                        <span className="text-[9px] font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded">
                           {product.stock} {product.unit}
                         </span>
                       )}
                     </div>
 
                     {/* Product Name & Brand */}
-                    <div className="mb-2">
+                    <div
+                      onClick={() => !isOut && addToCart(product)}
+                      className={!isOut ? 'cursor-pointer mb-2' : 'mb-2'}
+                    >
                       <h4 className="text-xs font-bold text-slate-900 line-clamp-2 leading-tight group-hover:text-emerald-700 transition-colors">
                         {product.name}
                       </h4>
@@ -253,16 +312,31 @@ export const PosView: React.FC = () => {
                         <span className="text-[10px] text-slate-400 ml-0.5">/{product.unit}</span>
                       </div>
 
-                      <button
-                        disabled={isOut}
-                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
-                          isOut
-                            ? 'bg-slate-200 text-slate-400'
-                            : 'bg-emerald-50 text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white'
-                        }`}
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center space-x-1">
+                        {/* Quick Restock / Add Quantity Action */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRestockProduct(product);
+                          }}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"
+                          title="Check & Add Product Stock Quantity"
+                        >
+                          <PackagePlus className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => !isOut && addToCart(product)}
+                          disabled={isOut}
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                            isOut
+                              ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                              : 'bg-emerald-50 text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white'
+                          }`}
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -281,7 +355,7 @@ export const PosView: React.FC = () => {
                 <ShoppingBag className="w-5 h-5 text-emerald-600" />
                 <h3 className="font-bold text-sm text-slate-900">Checkout Cart</h3>
                 <span className="bg-emerald-100 text-emerald-800 text-xs font-black px-2 py-0.5 rounded-full">
-                  {cartTotals.totalQuantity}
+                  {cartTotals.totalQuantity} items
                 </span>
               </div>
 
@@ -343,67 +417,76 @@ export const PosView: React.FC = () => {
                   </p>
                 </div>
               ) : (
-                cart.map((item) => (
-                  <div key={item.product.id} className="py-2.5 flex items-start justify-between gap-2">
-                    {/* Item Info */}
-                    <div className="min-w-0 flex-1">
-                      <h5 className="text-xs font-bold text-slate-900 truncate">{item.product.name}</h5>
-                      <div className="flex items-center space-x-2 text-[11px] text-slate-500 mt-0.5">
-                        <span>{formatCurrency(item.unitPrice, settings.currencySymbol)}/{item.product.unit}</span>
-                        {item.taxRate > 0 && (
-                          <span className="text-[10px] text-slate-400 font-mono">+{item.taxRate}% Tax</span>
-                        )}
-                        {item.discountPercent > 0 && (
-                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded">
-                            {item.discountPercent}% Off
+                cart.map((item) => {
+                  const maxStock = item.product.stock;
+                  const isAtMaxStock = item.quantity >= maxStock;
+
+                  return (
+                    <div key={item.product.id} className="py-2.5 flex items-start justify-between gap-2">
+                      {/* Item Info */}
+                      <div className="min-w-0 flex-1">
+                        <h5 className="text-xs font-bold text-slate-900 truncate">{item.product.name}</h5>
+                        <div className="flex items-center space-x-2 text-[11px] text-slate-500 mt-0.5">
+                          <span>{formatCurrency(item.unitPrice, settings.currencySymbol)}/{item.product.unit}</span>
+                          <span className="text-[10px] text-slate-400 font-mono">Stock: {maxStock}</span>
+                          {item.taxRate > 0 && (
+                            <span className="text-[10px] text-slate-400 font-mono">+{item.taxRate}% Tax</span>
+                          )}
+                          {item.discountPercent > 0 && (
+                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded">
+                              {item.discountPercent}% Off
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Quantity Adjuster & Total */}
+                      <div className="flex items-center space-x-2 shrink-0">
+                        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white">
+                          <button
+                            onClick={() => updateCartQuantity(item.product.id, item.quantity - 1)}
+                            className="px-1.5 py-1 text-slate-500 hover:bg-slate-100 transition-colors"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <input
+                            type="number"
+                            step="any"
+                            min="1"
+                            max={maxStock}
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              if (!isNaN(val)) updateCartQuantity(item.product.id, val);
+                            }}
+                            className="w-10 text-center text-xs font-bold border-none focus:outline-none p-0"
+                          />
+                          <button
+                            onClick={() => updateCartQuantity(item.product.id, item.quantity + 1)}
+                            disabled={isAtMaxStock}
+                            className="px-1.5 py-1 text-slate-500 hover:bg-slate-100 disabled:opacity-30 transition-colors"
+                            title={isAtMaxStock ? 'Max available stock reached' : 'Increase quantity'}
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+
+                        <div className="text-right min-w-[55px]">
+                          <span className="text-xs font-black text-slate-900 block">
+                            {formatCurrency(item.total, settings.currencySymbol)}
                           </span>
-                        )}
-                      </div>
-                    </div>
+                        </div>
 
-                    {/* Quantity Adjuster & Total */}
-                    <div className="flex items-center space-x-2 shrink-0">
-                      <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white">
                         <button
-                          onClick={() => updateCartQuantity(item.product.id, item.quantity - 1)}
-                          className="px-1.5 py-1 text-slate-500 hover:bg-slate-100 transition-colors"
+                          onClick={() => removeFromCart(item.product.id)}
+                          className="text-slate-300 hover:text-rose-500 transition-colors p-1"
                         >
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <input
-                          type="number"
-                          step="any"
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value);
-                            if (!isNaN(val)) updateCartQuantity(item.product.id, val);
-                          }}
-                          className="w-10 text-center text-xs font-bold border-none focus:outline-none p-0"
-                        />
-                        <button
-                          onClick={() => updateCartQuantity(item.product.id, item.quantity + 1)}
-                          className="px-1.5 py-1 text-slate-500 hover:bg-slate-100 transition-colors"
-                        >
-                          <Plus className="w-3 h-3" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
-
-                      <div className="text-right min-w-[55px]">
-                        <span className="text-xs font-black text-slate-900 block">
-                          {formatCurrency(item.total, settings.currencySymbol)}
-                        </span>
-                      </div>
-
-                      <button
-                        onClick={() => removeFromCart(item.product.id)}
-                        className="text-slate-300 hover:text-rose-500 transition-colors p-1"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
@@ -468,6 +551,22 @@ export const PosView: React.FC = () => {
         onClose={() => setIsScannerOpen(false)}
         onScanComplete={(product) => addToCart(product)}
       />
+
+      {/* Quick Check & Add Product Quantity Modal */}
+      <QuickRestockModal
+        isOpen={!!restockProduct}
+        onClose={() => setRestockProduct(null)}
+        product={restockProduct}
+      />
+
+      {/* Sales of Day / Week / Month Explorer Modal */}
+      {salesPeriodModalPeriod && (
+        <SalesPeriodModal
+          isOpen={true}
+          onClose={() => setSalesPeriodModalPeriod(null)}
+          initialPeriod={salesPeriodModalPeriod}
+        />
+      )}
 
       {/* Payment Settlement Modal */}
       <PaymentModal

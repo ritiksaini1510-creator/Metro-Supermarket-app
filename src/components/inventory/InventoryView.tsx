@@ -30,6 +30,8 @@ import {
 import { ProductModal } from './ProductModal';
 import { StockAdjustmentModal } from './StockAdjustmentModal';
 import { BarcodeLabelSheet } from './BarcodeLabelSheet';
+import { QuickRestockModal } from './QuickRestockModal';
+import { PackagePlus } from 'lucide-react';
 
 type StockStatusFilter = 'all' | 'in_stock' | 'low_stock' | 'out_of_stock' | 'expiring' | 'expired';
 
@@ -41,6 +43,7 @@ export const InventoryView: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<StockStatusFilter>('all');
   const [selectedProductForEdit, setSelectedProductForEdit] = useState<Product | null>(null);
   const [selectedProductForAdjust, setSelectedProductForAdjust] = useState<Product | null>(null);
+  const [quickRestockProduct, setQuickRestockProduct] = useState<Product | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isLabelsOpen, setIsLabelsOpen] = useState(false);
 
@@ -387,11 +390,19 @@ export const InventoryView: React.FC = () => {
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end space-x-1">
                           <button
+                            onClick={() => setQuickRestockProduct(p)}
+                            className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-[10px] font-bold transition-colors flex items-center space-x-1"
+                            title="Quick Add Quantity"
+                          >
+                            <PackagePlus className="w-3 h-3" />
+                            <span>+Add Qty</span>
+                          </button>
+                          <button
                             onClick={() => setSelectedProductForAdjust(p)}
                             className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold transition-colors"
-                            title="Adjust Stock / Physical Audit"
+                            title="Adjust Stock / Audit"
                           >
-                            Adjust Stock
+                            Adjust
                           </button>
                           <button
                             onClick={() => setSelectedProductForEdit(p)}
@@ -429,6 +440,13 @@ export const InventoryView: React.FC = () => {
           </span>
         </div>
       </div>
+
+      {/* Quick Add Quantity Modal */}
+      <QuickRestockModal
+        isOpen={quickRestockProduct !== null}
+        onClose={() => setQuickRestockProduct(null)}
+        product={quickRestockProduct}
+      />
 
       {/* Product Add / Edit Modal */}
       <ProductModal

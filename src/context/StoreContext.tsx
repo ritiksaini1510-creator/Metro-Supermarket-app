@@ -20,7 +20,17 @@ import {
   INITIAL_SETTINGS,
   INITIAL_SHIFT
 } from '../data/initialData';
-import { playScannerBeep, playCashRegisterChime, playWarningBeep, isProductLowStock, isProductExpired, isProductNearExpiry, isProductOutOfStock } from '../utils/helpers';
+import {
+  playScannerBeep,
+  playCashRegisterChime,
+  playWarningBeep,
+  isProductLowStock,
+  isProductExpired,
+  isProductNearExpiry,
+  isProductOutOfStock,
+  getSalesByPeriods,
+  PeriodSalesSummary
+} from '../utils/helpers';
 
 interface StoreContextType {
   products: Product[];
@@ -45,6 +55,27 @@ interface StoreContextType {
     expiredProducts: Product[];
     nearExpiryProducts: Product[];
   };
+
+  // Aggregated Sales of Day, Week, Month & All
+  salesSummary: {
+    today: PeriodSalesSummary;
+    week: PeriodSalesSummary;
+    month: PeriodSalesSummary;
+    all: PeriodSalesSummary;
+  };
+
+  // Stock check & quick stock updater
+  stockNotification: string | null;
+  setStockNotification: (msg: string | null) => void;
+  checkProductStock: (productId: string, requestedQuantity?: number) => {
+    isAvailable: boolean;
+    currentStock: number;
+    cartQuantity: number;
+    remainingAvailable: number;
+    isLowStock: boolean;
+    isOutOfStock: boolean;
+  };
+  quickAddStock: (productId: string, quantityToAdd: number, reason?: string) => void;
 
   // Cart operations
   addToCart: (product: Product, quantity?: number, discountPercent?: number) => boolean;
@@ -155,8 +186,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return saved ? JSON.parse(saved) : INITIAL_SETTINGS;
   });
 
-  // POS Active Cart (in-memory for active checkout session)
+  // Active POS Cart (in-memory for active checkout session)
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [stockNotification, setStockNotification] = useState<string | null>(null);
+
+  // Auto-dismiss stock notification after 4 seconds
+  useEffect(() => {
+    if (stockNotification) {
+      const timer = setTimeout(() => setStockNotification(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [stockNotification]);
 
   // Sync to localStorage
   useEffect(() => {
@@ -209,6 +249,76 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     nearExpiryProducts,
   };
 
+  // Compute Aggregated Sales Summary for Day, Week, Month & All Time
+  const salesSummary = React.useMemo(() => {
+    return getSalesByPeriods(sales);
+  }, [sales]);
+
+  // Helper to check stock availability for a product vs what is already in cart
+  const checkProductStock = (productId: string, requestedQuantity = 1) => {
+    const prod = products.find(p => p.id === productId);
+    if (!prod) {
+      return {
+        isAvailable: false,
+        currentStock: 0,
+        cartQuantity: 0,
+        remainingAvailable: 0,
+        isLowStock: false,
+        isOutOfStock: true,
+      };
+    }
+    const cartItem = cart.find(ci => ci.product.id === productId);
+    const cartQuantity = cartItem ? cartItem.quantity : 0;
+    const remainingAvailable = Math.max(0, prod.stock - cartQuantity);
+    const isAvailable = remainingAvailable >= requestedQuantity;
+
+    return {
+      isAvailable,
+      currentStock: prod.stock,
+      cartQuantity,
+      remainingAvailable,
+      isLowStock: isProductLowStock(prod, settings.lowStockGlobalThreshold),
+      isOutOfStock: isProductOutOfStock(prod),
+    };
+  };
+
+  // Quick Restock / Add Stock quantity to a product directly
+  const quickAddStock = (productId: string, quantityToAdd: number, reason = 'Quick Stock Inflow') => {
+    const prod = products.find(p => p.id === productId);
+    if (!prod || quantityToAdd <= 0) return;
+
+    const newStock = prod.stock + quantityToAdd;
+    const newAdjustment: StockAdjustment = {
+      id: `adj-${Date.now()}`,
+      productId: prod.id,
+      productName: prod.name,
+      date: new Date().toISOString(),
+      quantityChange: quantityToAdd,
+      previousStock: prod.stock,
+      newStock,
+      reason: 'Other',
+      notes: `${reason} (+${quantityToAdd} ${prod.unit})`,
+      performedBy: settings.cashierName || 'Store Manager',
+    };
+
+    setStockAdjustments(prev => [newAdjustment, ...prev]);
+
+    setProducts(prev =>
+      prev.map(p => {
+        if (p.id === productId) {
+          return {
+            ...p,
+            stock: newStock,
+            lastRestocked: new Date().toISOString().split('T')[0],
+          };
+        }
+        return p;
+      })
+    );
+
+    setStockNotification(`Added +${quantityToAdd} ${prod.unit} to "${prod.name}". New Stock: ${newStock} ${prod.unit}`);
+  };
+
   // Helper to find product by barcode or SKU (case-insensitive)
   const findProductByBarcodeOrSku = (query: string): Product | undefined => {
     if (!query) return undefined;
@@ -222,16 +332,33 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Cart operations
   const addToCart = (product: Product, quantity = 1, discountPercent = 0): boolean => {
-    if (product.stock <= 0) {
+    const liveProd = products.find(p => p.id === product.id) || product;
+    
+    if (liveProd.stock <= 0) {
       playWarningBeep();
+      setStockNotification(`Out of Stock: "${liveProd.name}" has 0 units available.`);
       return false;
     }
 
+    const existingItem = cart.find(item => item.product.id === liveProd.id);
+    const existingQty = existingItem ? existingItem.quantity : 0;
+    const totalRequestedQty = existingQty + quantity;
+
+    if (totalRequestedQty > liveProd.stock) {
+      playWarningBeep();
+      const maxAddable = Math.max(0, liveProd.stock - existingQty);
+      if (maxAddable <= 0) {
+        setStockNotification(`Stock limit reached: All available ${liveProd.stock} ${liveProd.unit} of "${liveProd.name}" are already in the cart.`);
+        return false;
+      }
+      setStockNotification(`Stock alert: Only ${liveProd.stock} ${liveProd.unit} available in stock for "${liveProd.name}".`);
+    }
+
     setCart(prev => {
-      const existingIndex = prev.findIndex(item => item.product.id === product.id);
+      const existingIndex = prev.findIndex(item => item.product.id === liveProd.id);
       if (existingIndex > -1) {
         const item = prev[existingIndex];
-        const newQty = item.quantity + quantity;
+        const newQty = Math.min(item.quantity + quantity, liveProd.stock);
         
         // Calculate item metrics
         const subtotal = Number((item.unitPrice * newQty * (1 - item.discountPercent / 100)).toFixed(2));
@@ -248,19 +375,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         };
         return updated;
       } else {
-        const unitPrice = product.sellingPrice;
-        const subtotal = Number((unitPrice * quantity * (1 - discountPercent / 100)).toFixed(2));
-        const taxAmount = Number(((subtotal * product.taxRate) / 100).toFixed(2));
+        const unitPrice = liveProd.sellingPrice;
+        const finalQty = Math.min(quantity, liveProd.stock);
+        const subtotal = Number((unitPrice * finalQty * (1 - discountPercent / 100)).toFixed(2));
+        const taxAmount = Number(((subtotal * liveProd.taxRate) / 100).toFixed(2));
         const total = Number((subtotal + taxAmount).toFixed(2));
 
         return [
           ...prev,
           {
-            product,
-            quantity,
+            product: liveProd,
+            quantity: finalQty,
             unitPrice,
             discountPercent,
-            taxRate: product.taxRate,
+            taxRate: liveProd.taxRate,
             subtotal,
             taxAmount,
             total,
@@ -279,15 +407,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return;
     }
 
+    const prod = products.find(p => p.id === productId);
+    let targetQty = quantity;
+
+    if (prod && quantity > prod.stock) {
+      targetQty = prod.stock;
+      playWarningBeep();
+      setStockNotification(`Maximum stock limit: "${prod.name}" only has ${prod.stock} ${prod.unit} in stock.`);
+    }
+
     setCart(prev =>
       prev.map(item => {
         if (item.product.id === productId) {
-          const subtotal = Number((item.unitPrice * quantity * (1 - item.discountPercent / 100)).toFixed(2));
+          const subtotal = Number((item.unitPrice * targetQty * (1 - item.discountPercent / 100)).toFixed(2));
           const taxAmount = Number(((subtotal * item.taxRate) / 100).toFixed(2));
           const total = Number((subtotal + taxAmount).toFixed(2));
           return {
             ...item,
-            quantity,
+            quantity: targetQty,
             subtotal,
             taxAmount,
             total,
@@ -731,6 +868,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         currentShift,
         settings,
         alerts,
+        salesSummary,
+        stockNotification,
+        setStockNotification,
+        checkProductStock,
+        quickAddStock,
         addToCart,
         updateCartQuantity,
         updateItemDiscount,
