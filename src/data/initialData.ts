@@ -1,21 +1,33 @@
-import { Product, Supplier, SaleBill, PurchaseOrder, StoreSettings, CashDrawerShift } from '../types';
+import { Product, Supplier, SaleBill, PurchaseOrder, StoreSettings, CashDrawerShift, StoreAuthSession } from '../types';
+
+export const INITIAL_AUTH_SESSION: StoreAuthSession = {
+  storeName: 'Aapka Supermarket & Kirana',
+  phone: '+91 98765 43210',
+  address: 'Shop No. 12, Main Market Road, Commercial Complex, Sector 18',
+  ownerName: 'Ritik Saini',
+  role: 'owner',
+  gstin: '07AAAAA0000A1Z5',
+  pin: '1234',
+  loggedInAt: new Date().toISOString(),
+  isLoggedIn: true,
+};
 
 export const INITIAL_SETTINGS: StoreSettings = {
-  storeName: 'MetroFresh Supermarket',
-  tagline: 'Fresh Groceries, Daily Value & Essentials',
-  phone: '+1 (555) 234-5678',
-  email: 'support@metrofreshmarket.com',
-  address: '452 Marketplace Blvd, Suite 100, Metro City',
-  gstinTaxId: 'US-TAX-89240182',
-  currencySymbol: '$',
-  currencyCode: 'USD',
+  storeName: 'Aapka Supermarket & Kirana',
+  tagline: 'Fresh Groceries, Daily Essentials & Wholesale Value',
+  phone: '+91 98765 43210',
+  email: 'store@aapkasupermarket.com',
+  address: 'Shop No. 12, Main Market Road, Commercial Complex, Sector 18',
+  gstinTaxId: '07AAAAA0000A1Z5',
+  currencySymbol: '₹',
+  currencyCode: 'INR',
   defaultTaxRate: 5,
-  receiptFooterMessage: 'Thank you for shopping at MetroFresh! Please retain bill for returns within 7 days.',
+  receiptFooterMessage: 'Thank you for shopping with us! Please retain this invoice for returns/exchanges within 7 days.',
   enableLowStockAlerts: true,
   lowStockGlobalThreshold: 15,
   expiryWarningDays: 45,
-  barcodePrefix: 'MF',
-  cashierName: 'Alex Morgan (Lane 02)',
+  barcodePrefix: 'AS',
+  cashierName: 'Ritik Saini (Counter 01)',
 };
 
 export const INITIAL_SUPPLIERS: Supplier[] = [

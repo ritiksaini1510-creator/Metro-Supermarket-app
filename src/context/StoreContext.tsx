@@ -10,7 +10,8 @@ import {
   CashDrawerShift,
   ParkedCart,
   PaymentDetails,
-  Customer
+  Customer,
+  StoreAuthSession
 } from '../types';
 import {
   INITIAL_PRODUCTS,
@@ -18,7 +19,8 @@ import {
   INITIAL_SALES_HISTORY,
   INITIAL_PURCHASES,
   INITIAL_SETTINGS,
-  INITIAL_SHIFT
+  INITIAL_SHIFT,
+  INITIAL_AUTH_SESSION
 } from '../data/initialData';
 import {
   playScannerBeep,
@@ -42,6 +44,11 @@ interface StoreContextType {
   parkedCarts: ParkedCart[];
   currentShift: CashDrawerShift;
   settings: StoreSettings;
+  authSession: StoreAuthSession;
+  loginStore: (sessionData: Partial<StoreAuthSession>) => void;
+  logoutStore: () => void;
+  isLoginModalOpen: boolean;
+  setIsLoginModalOpen: (open: boolean) => void;
   
   // Real-time alerts count & list
   alerts: {
@@ -142,9 +149,27 @@ const STORAGE_KEYS = {
   PARKED_CARTS: 'mf_pos_parked_carts_v1',
   SHIFT: 'mf_pos_shift_v1',
   SETTINGS: 'mf_pos_settings_v1',
+  AUTH: 'mf_pos_auth_v1',
 };
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Store Login / Auth Session state
+  const [authSession, setAuthSession] = useState<StoreAuthSession>(() => {
+    const saved = localStorage.getItem(STORAGE_KEYS.AUTH);
+    return saved ? JSON.parse(saved) : INITIAL_AUTH_SESSION;
+  });
+
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(() => {
+    const savedAuth = localStorage.getItem(STORAGE_KEYS.AUTH);
+    if (!savedAuth) return false;
+    try {
+      const parsed = JSON.parse(savedAuth);
+      return !parsed.isLoggedIn;
+    } catch {
+      return false;
+    }
+  });
+
   // Load state from localStorage with fallback to initial sample data
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
@@ -183,7 +208,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const [settings, setSettings] = useState<StoreSettings>(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-    return saved ? JSON.parse(saved) : INITIAL_SETTINGS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Seamlessly migrate legacy '$' or 'USD' to Indian Rupees '₹' / 'INR'
+        if (parsed.currencySymbol === '$' || !parsed.currencySymbol || parsed.currencyCode === 'USD') {
+          parsed.currencySymbol = '₹';
+          parsed.currencyCode = 'INR';
+        }
+        return parsed;
+      } catch {
+        return INITIAL_SETTINGS;
+      }
+    }
+    return INITIAL_SETTINGS;
   });
 
   // Active POS Cart (in-memory for active checkout session)
@@ -197,6 +235,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return () => clearTimeout(timer);
     }
   }, [stockNotification]);
+
+  // Sync authSession to localStorage
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEYS.AUTH, JSON.stringify(authSession));
+  }, [authSession]);
 
   // Sync to localStorage
   useEffect(() => {
@@ -812,6 +855,49 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setSettings(prev => ({ ...prev, ...newSettings }));
   };
 
+  // Store Login and Session Management
+  const loginStore = (sessionData: Partial<StoreAuthSession>) => {
+    const updatedSession: StoreAuthSession = {
+      storeName: sessionData.storeName || authSession.storeName || 'Aapka Supermarket & Kirana',
+      phone: sessionData.phone || authSession.phone || '+91 98765 43210',
+      address: sessionData.address || authSession.address || 'Shop No. 12, Main Market Road',
+      ownerName: sessionData.ownerName || authSession.ownerName || 'Store Admin',
+      role: sessionData.role || authSession.role || 'owner',
+      gstin: sessionData.gstin !== undefined ? sessionData.gstin : authSession.gstin,
+      pin: sessionData.pin !== undefined ? sessionData.pin : authSession.pin,
+      loggedInAt: new Date().toISOString(),
+      isLoggedIn: true,
+    };
+
+    setAuthSession(updatedSession);
+    localStorage.setItem(STORAGE_KEYS.AUTH, JSON.stringify(updatedSession));
+
+    // Update store settings to reflect the logged in store credentials
+    setSettings(prev => ({
+      ...prev,
+      storeName: updatedSession.storeName,
+      phone: updatedSession.phone,
+      address: updatedSession.address,
+      cashierName: updatedSession.ownerName,
+      ...(updatedSession.gstin ? { gstinTaxId: updatedSession.gstin } : {}),
+      currencySymbol: '₹',
+      currencyCode: 'INR',
+    }));
+
+    setIsLoginModalOpen(false);
+    playCashRegisterChime();
+  };
+
+  const logoutStore = () => {
+    const loggedOutSession: StoreAuthSession = {
+      ...authSession,
+      isLoggedIn: false,
+    };
+    setAuthSession(loggedOutSession);
+    localStorage.setItem(STORAGE_KEYS.AUTH, JSON.stringify(loggedOutSession));
+    setIsLoginModalOpen(true);
+  };
+
   const resetToSampleData = () => {
     setProducts(INITIAL_PRODUCTS);
     setSuppliers(INITIAL_SUPPLIERS);
@@ -867,6 +953,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         parkedCarts,
         currentShift,
         settings,
+        authSession,
+        loginStore,
+        logoutStore,
+        isLoginModalOpen,
+        setIsLoginModalOpen,
         alerts,
         salesSummary,
         stockNotification,

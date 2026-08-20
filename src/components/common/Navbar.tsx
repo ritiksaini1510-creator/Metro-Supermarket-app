@@ -18,7 +18,12 @@ import {
   Search,
   DollarSign,
   Calendar,
-  Sparkles
+  Sparkles,
+  UserCheck,
+  LogIn,
+  LogOut,
+  MapPin,
+  Phone
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { formatCurrency } from '../../utils/helpers';
@@ -46,10 +51,21 @@ export const Navbar: React.FC<NavbarProps> = ({
   setActiveTab,
   onOpenAlerts,
 }) => {
-  const { settings, alerts, currentShift, cartTotals, salesSummary, stockNotification } = useStore();
+  const {
+    settings,
+    alerts,
+    currentShift,
+    cartTotals,
+    salesSummary,
+    stockNotification,
+    authSession,
+    setIsLoginModalOpen,
+    logoutStore
+  } = useStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showAlertMenu, setShowAlertMenu] = useState(false);
   const [showSalesMenu, setShowSalesMenu] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [isSalesModalOpen, setIsSalesModalOpen] = useState(false);
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
   const [salesModalInitialPeriod, setSalesModalInitialPeriod] = useState<'today' | 'week' | 'month'>('today');
@@ -260,13 +276,80 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
               </div>
 
-              {/* Shift / Drawer Info Pill (Cashier) */}
-              <div className="hidden lg:flex items-center space-x-2 bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700/60 text-xs">
-                <Clock className="w-3.5 h-3.5 text-emerald-400" />
-                <div className="text-left">
-                  <span className="text-[10px] text-slate-400 block leading-tight">Lane Active</span>
-                  <span className="font-semibold text-white truncate max-w-[100px] block">{settings.cashierName}</span>
-                </div>
+              {/* Store Login / Session Profile Pill */}
+              <div className="relative">
+                <button
+                  id="store-profile-btn"
+                  onClick={() => setShowProfileMenu(!showProfileMenu)}
+                  className="flex items-center space-x-2 bg-slate-800/80 hover:bg-slate-700/80 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-700/60 text-xs text-slate-200 transition-colors"
+                  title="Store Profile & Terminal Login"
+                >
+                  <div className="w-5 h-5 rounded-lg bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center font-bold text-[10px]">
+                    ₹
+                  </div>
+                  <div className="text-left hidden lg:block leading-tight">
+                    <span className="text-[10px] text-slate-400 block truncate max-w-[110px]">
+                      {authSession.storeName}
+                    </span>
+                    <span className="font-semibold text-white truncate max-w-[110px] block">
+                      {authSession.ownerName || 'Terminal Active'}
+                    </span>
+                  </div>
+                  <ChevronDown className="w-3 h-3 text-slate-400" />
+                </button>
+
+                {/* Profile & Switch Store Popover */}
+                {showProfileMenu && (
+                  <div 
+                    className="absolute right-0 mt-2 w-72 bg-slate-900 text-slate-100 rounded-2xl shadow-2xl border border-slate-700 p-4 z-50 animate-in fade-in slide-in-from-top-2"
+                  >
+                    <div className="pb-3 border-b border-slate-800">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                          {authSession.role.toUpperCase()} TERMINAL
+                        </span>
+                        <span className="text-[10px] text-slate-400">INR (₹)</span>
+                      </div>
+                      <h4 className="font-bold text-sm text-white mt-1.5 truncate">{authSession.storeName}</h4>
+                      <p className="text-xs text-slate-300 flex items-center space-x-1.5 mt-1">
+                        <UserCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        <span className="truncate">{authSession.ownerName}</span>
+                      </p>
+                      <p className="text-[11px] text-slate-400 flex items-center space-x-1.5 mt-0.5">
+                        <Phone className="w-3 h-3 text-slate-500 shrink-0" />
+                        <span>{authSession.phone}</span>
+                      </p>
+                      <p className="text-[11px] text-slate-400 flex items-start space-x-1.5 mt-0.5 line-clamp-2">
+                        <MapPin className="w-3 h-3 text-slate-500 shrink-0 mt-0.5" />
+                        <span>{authSession.address}</span>
+                      </p>
+                    </div>
+
+                    <div className="pt-3 space-y-2 text-xs font-semibold">
+                      <button
+                        onClick={() => {
+                          setShowProfileMenu(false);
+                          setIsLoginModalOpen(true);
+                        }}
+                        className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-colors flex items-center justify-center space-x-2 shadow-xs"
+                      >
+                        <LogIn className="w-3.5 h-3.5" />
+                        <span>Switch Store / Edit Login</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setShowProfileMenu(false);
+                          logoutStore();
+                        }}
+                        className="w-full py-2 px-3 bg-slate-800 hover:bg-rose-500/20 hover:text-rose-300 text-slate-300 rounded-xl transition-colors flex items-center justify-center space-x-2 border border-slate-700"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>Lock & Logout</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Inventory Alerts Bell */}
@@ -371,6 +454,29 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Mobile Drawer Menu */}
         {mobileMenuOpen && (
           <div className="xl:hidden bg-slate-900 border-b border-slate-800 px-4 pt-2 pb-6 space-y-2">
+            {/* Mobile Store Profile Card */}
+            <div className="p-3 bg-slate-800/90 rounded-2xl border border-slate-700/80 mb-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-emerald-400">
+                    {authSession.role.toUpperCase()} • INR (₹)
+                  </span>
+                  <h4 className="text-xs font-bold text-white truncate max-w-[200px]">{authSession.storeName}</h4>
+                  <p className="text-[11px] text-slate-300 truncate">{authSession.ownerName} • {authSession.phone}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsLoginModalOpen(true);
+                    setMobileMenuOpen(false);
+                  }}
+                  className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] rounded-xl flex items-center space-x-1"
+                >
+                  <LogIn className="w-3 h-3" />
+                  <span>Login</span>
+                </button>
+              </div>
+            </div>
+
             <button
               onClick={() => {
                 setIsGlobalSearchOpen(true);

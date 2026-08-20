@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StoreProvider } from './context/StoreContext';
+import { StoreProvider, useStore } from './context/StoreContext';
 import { Navbar, ActiveTab } from './components/common/Navbar';
 import { AlertsBanner } from './components/common/AlertsBanner';
 import { PosView } from './components/pos/PosView';
@@ -10,9 +10,11 @@ import { ReportsView } from './components/reports/ReportsView';
 import { AnalyticsDashboard } from './components/analytics/AnalyticsDashboard';
 import { FloorStaffView } from './components/floor/FloorStaffView';
 import { SettingsView } from './components/settings/SettingsView';
+import { StoreLoginModal } from './components/auth/StoreLoginModal';
 
 const MainLayout: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('pos');
+  const { isLoginModalOpen, setIsLoginModalOpen } = useStore();
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col antialiased selection:bg-emerald-500 selection:text-white font-sans">
@@ -37,6 +39,12 @@ const MainLayout: React.FC = () => {
         {activeTab === 'floor' && <FloorStaffView />}
         {activeTab === 'settings' && <SettingsView />}
       </main>
+
+      {/* Store Login & Terminal Access Modal */}
+      <StoreLoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+      />
     </div>
   );
 };

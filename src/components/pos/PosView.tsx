@@ -26,7 +26,7 @@ import { HoldCartsModal } from './HoldCartsModal';
 import { ReceiptModal } from '../common/ReceiptModal';
 import { QuickRestockModal } from '../inventory/QuickRestockModal';
 import { SalesPeriodModal } from '../common/SalesPeriodModal';
-import { PackagePlus, TrendingUp } from 'lucide-react';
+import { PackagePlus, TrendingUp, CheckCircle2, Hand } from 'lucide-react';
 
 const CATEGORIES: ('All' | ProductCategory)[] = [
   'All',
@@ -68,8 +68,25 @@ export const PosView: React.FC = () => {
   const [activeCustomer, setActiveCustomer] = useState({ name: '', phone: '' });
   const [restockProduct, setRestockProduct] = useState<Product | null>(null);
   const [salesPeriodModalPeriod, setSalesPeriodModalPeriod] = useState<'today' | 'week' | 'month' | null>(null);
+  const [selectedCartProductId, setSelectedCartProductId] = useState<string | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Active selected item in checkout order cart
+  const selectedCartItem =
+    cart.find((item) => item.product.id === selectedCartProductId) ||
+    (cart.length > 0 ? cart[cart.length - 1] : null);
+
+  const handleSelectProduct = (product: Product) => {
+    if (isProductOutOfStock(product)) {
+      setRestockProduct(product);
+      return;
+    }
+    const added = addToCart(product, 1);
+    if (added) {
+      setSelectedCartProductId(product.id);
+    }
+  };
 
   // Keyboard shortcut listener for high-speed cashiers
   useEffect(() => {
@@ -114,10 +131,12 @@ export const PosView: React.FC = () => {
     );
 
     if (exactMatch) {
-      addToCart(exactMatch);
+      const ok = addToCart(exactMatch);
+      if (ok) setSelectedCartProductId(exactMatch.id);
       setSearchQuery('');
     } else if (filteredProducts.length === 1) {
-      addToCart(filteredProducts[0]);
+      const ok = addToCart(filteredProducts[0]);
+      if (ok) setSelectedCartProductId(filteredProducts[0].id);
       setSearchQuery('');
     }
   };
@@ -127,6 +146,7 @@ export const PosView: React.FC = () => {
     const name = activeCustomer.name ? `Cart (${activeCustomer.name})` : undefined;
     parkCurrentCart(name, activeCustomer.phone ? activeCustomer : undefined);
     setActiveCustomer({ name: '', phone: '' });
+    setSelectedCartProductId(null);
   };
 
   const handlePaymentSuccess = (bill: SaleBill) => {
@@ -134,6 +154,7 @@ export const PosView: React.FC = () => {
     setCompletedBill(bill);
     setIsReceiptOpen(true);
     setActiveCustomer({ name: '', phone: '' });
+    setSelectedCartProductId(null);
   };
 
   return (
@@ -262,12 +283,19 @@ export const PosView: React.FC = () => {
               filteredProducts.map((product) => {
                 const isOut = isProductOutOfStock(product);
                 const isLow = isProductLowStock(product, settings.lowStockGlobalThreshold);
+                const inCartItem = cart.find((i) => i.product.id === product.id);
+                const isSelected = selectedCartItem?.product.id === product.id;
 
                 return (
                   <div
                     key={product.id}
-                    className={`bg-white rounded-2xl p-3 border transition-all flex flex-col justify-between relative group select-none ${
-                      isOut
+                    onClick={() => handleSelectProduct(product)}
+                    className={`bg-white rounded-2xl p-3 border transition-all flex flex-col justify-between relative group select-none cursor-pointer ${
+                      isSelected
+                        ? 'border-emerald-500 ring-2 ring-emerald-500/40 bg-emerald-50/20 shadow-md scale-[1.01]'
+                        : inCartItem
+                        ? 'border-emerald-300 bg-emerald-50/10'
+                        : isOut
                         ? 'border-slate-200 bg-slate-50/70'
                         : 'border-slate-200/80 hover:border-emerald-400 hover:shadow-md'
                     }`}
@@ -277,7 +305,15 @@ export const PosView: React.FC = () => {
                       <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider truncate">
                         {product.category}
                       </span>
-                      {isOut ? (
+                      {isSelected ? (
+                        <span className="text-[9px] font-black uppercase bg-emerald-600 text-white px-1.5 py-0.5 rounded shadow-xs">
+                          Active ({inCartItem?.quantity || 1})
+                        </span>
+                      ) : inCartItem ? (
+                        <span className="text-[9px] font-black uppercase bg-emerald-100 text-emerald-900 px-1.5 py-0.5 rounded">
+                          In Bill: {inCartItem.quantity}
+                        </span>
+                      ) : isOut ? (
                         <span className="text-[9px] font-black uppercase bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded">
                           0 Left
                         </span>
@@ -293,10 +329,7 @@ export const PosView: React.FC = () => {
                     </div>
 
                     {/* Product Name & Brand */}
-                    <div
-                      onClick={() => !isOut && addToCart(product)}
-                      className={!isOut ? 'cursor-pointer mb-2' : 'mb-2'}
-                    >
+                    <div className="mb-2">
                       <h4 className="text-xs font-bold text-slate-900 line-clamp-2 leading-tight group-hover:text-emerald-700 transition-colors">
                         {product.name}
                       </h4>
@@ -304,39 +337,102 @@ export const PosView: React.FC = () => {
                     </div>
 
                     {/* Price & Add Action */}
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                      <div>
-                        <span className="text-sm font-black text-slate-900">
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 gap-1.5">
+                      <div className="min-w-0">
+                        <span className="text-sm font-black text-slate-900 truncate block">
                           {formatCurrency(product.sellingPrice, settings.currencySymbol)}
                         </span>
-                        <span className="text-[10px] text-slate-400 ml-0.5">/{product.unit}</span>
+                        <span className="text-[10px] text-slate-400">/{product.unit}</span>
                       </div>
 
-                      <div className="flex items-center space-x-1">
-                        {/* Quick Restock / Add Quantity Action */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setRestockProduct(product);
-                          }}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"
-                          title="Check & Add Product Stock Quantity"
-                        >
-                          <PackagePlus className="w-3.5 h-3.5" />
-                        </button>
+                      {inCartItem ? (
+                        <div className="flex items-center space-x-1" onClick={(e) => e.stopPropagation()}>
+                          {/* Quick Restock / Check Stock Quantity */}
+                          <button
+                            onClick={() => setRestockProduct(product)}
+                            className="p-1 rounded text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"
+                            title="Check & Add Product Inventory"
+                          >
+                            <PackagePlus className="w-3.5 h-3.5" />
+                          </button>
 
-                        <button
-                          onClick={() => !isOut && addToCart(product)}
-                          disabled={isOut}
-                          className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
-                            isOut
-                              ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                              : 'bg-emerald-50 text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white'
-                          }`}
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
+                          {/* Direct Inline Add/Remove Quantity Stepper directly at the place of product */}
+                          <div className="flex items-center bg-emerald-600 text-white rounded-xl shadow-xs overflow-hidden border border-emerald-700">
+                            <button
+                              onClick={() => {
+                                const newQty = inCartItem.quantity - 1;
+                                updateCartQuantity(product.id, newQty);
+                                if (newQty <= 0 && selectedCartProductId === product.id) {
+                                  setSelectedCartProductId(null);
+                                }
+                              }}
+                              className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center bg-emerald-700 hover:bg-emerald-800 text-white active:scale-90 transition-all font-black"
+                              title="Decrease quantity (-1)"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              onClick={() => setSelectedCartProductId(product.id)}
+                              className="px-1.5 sm:px-2 font-black text-xs min-w-[24px] text-center select-none hover:bg-emerald-700/50 transition-colors"
+                              title="Click to focus in editor"
+                            >
+                              {inCartItem.quantity}
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                if (inCartItem.quantity < product.stock) {
+                                  updateCartQuantity(product.id, inCartItem.quantity + 1);
+                                  setSelectedCartProductId(product.id);
+                                }
+                              }}
+                              disabled={inCartItem.quantity >= product.stock}
+                              className={`w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-white active:scale-90 transition-all font-black ${
+                                inCartItem.quantity >= product.stock
+                                  ? 'bg-emerald-900/60 opacity-60 cursor-not-allowed'
+                                  : 'bg-emerald-700 hover:bg-emerald-800'
+                              }`}
+                              title={inCartItem.quantity >= product.stock ? 'Maximum stock reached' : 'Increase quantity (+1)'}
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-1">
+                          {/* Quick Restock / Add Quantity Action */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRestockProduct(product);
+                            }}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"
+                            title="Check & Add Product Stock Quantity"
+                          >
+                            <PackagePlus className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectProduct(product);
+                            }}
+                            disabled={isOut}
+                            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-1 transition-all ${
+                              isSelected
+                                ? 'bg-emerald-600 text-white shadow-xs'
+                                : isOut
+                                ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                : 'bg-emerald-50 text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white shadow-2xs hover:scale-105'
+                            }`}
+                            title="Add item to bill"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -405,27 +501,45 @@ export const PosView: React.FC = () => {
             </div>
 
             {/* Cart Items List */}
-            <div className="flex-1 p-3 overflow-y-auto max-h-[360px] divide-y divide-slate-100">
+            <div className="flex-1 p-3 overflow-y-auto max-h-[380px] sm:max-h-[440px] divide-y divide-slate-100">
               {cart.length === 0 ? (
-                <div className="py-16 text-center text-slate-400">
+                <div className="py-12 text-center text-slate-400">
                   <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2 text-slate-400">
                     <ScanLine className="w-6 h-6" />
                   </div>
                   <p className="text-xs font-bold text-slate-600">Active bill is empty</p>
-                  <p className="text-[11px] text-slate-400 mt-1 max-w-[200px] mx-auto">
-                    Scan items or tap products on the left to begin billing.
+                  <p className="text-[11px] text-slate-400 mt-1 max-w-[220px] mx-auto">
+                    Select any item from the catalog to see it here and instantly adjust quantity.
                   </p>
                 </div>
               ) : (
                 cart.map((item) => {
                   const maxStock = item.product.stock;
                   const isAtMaxStock = item.quantity >= maxStock;
+                  const isSelected = selectedCartItem?.product.id === item.product.id;
 
                   return (
-                    <div key={item.product.id} className="py-2.5 flex items-start justify-between gap-2">
+                    <div
+                      key={item.product.id}
+                      onClick={() => setSelectedCartProductId(item.product.id)}
+                      className={`py-2 px-2 rounded-xl transition-all flex items-start justify-between gap-2 cursor-pointer ${
+                        isSelected
+                          ? 'bg-emerald-50/80 border border-emerald-300 ring-2 ring-emerald-400/40 shadow-xs'
+                          : 'hover:bg-slate-50 border border-transparent'
+                      }`}
+                    >
                       {/* Item Info */}
                       <div className="min-w-0 flex-1">
-                        <h5 className="text-xs font-bold text-slate-900 truncate">{item.product.name}</h5>
+                        <div className="flex items-center space-x-1.5">
+                          <h5 className="text-xs font-bold text-slate-900 truncate">
+                            {item.product.name}
+                          </h5>
+                          {isSelected && (
+                            <span className="bg-emerald-600 text-white text-[9px] font-black uppercase px-1.5 py-0.5 rounded shrink-0">
+                              Active
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center space-x-2 text-[11px] text-slate-500 mt-0.5">
                           <span>{formatCurrency(item.unitPrice, settings.currencySymbol)}/{item.product.unit}</span>
                           <span className="text-[10px] text-slate-400 font-mono">Stock: {maxStock}</span>
@@ -441,8 +555,11 @@ export const PosView: React.FC = () => {
                       </div>
 
                       {/* Quantity Adjuster & Total */}
-                      <div className="flex items-center space-x-2 shrink-0">
-                        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white">
+                      <div
+                        className="flex items-center space-x-2 shrink-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white shadow-xs">
                           <button
                             onClick={() => updateCartQuantity(item.product.id, item.quantity - 1)}
                             className="px-1.5 py-1 text-slate-500 hover:bg-slate-100 transition-colors"
@@ -478,8 +595,12 @@ export const PosView: React.FC = () => {
                         </div>
 
                         <button
-                          onClick={() => removeFromCart(item.product.id)}
+                          onClick={() => {
+                            removeFromCart(item.product.id);
+                            if (selectedCartProductId === item.product.id) setSelectedCartProductId(null);
+                          }}
                           className="text-slate-300 hover:text-rose-500 transition-colors p-1"
+                          title="Remove item"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -549,7 +670,10 @@ export const PosView: React.FC = () => {
       <BarcodeScannerModal
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
-        onScanComplete={(product) => addToCart(product)}
+        onScanComplete={(product) => {
+          addToCart(product);
+          setSelectedCartProductId(product.id);
+        }}
       />
 
       {/* Quick Check & Add Product Quantity Modal */}

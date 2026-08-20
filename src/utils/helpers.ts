@@ -1,7 +1,7 @@
 import { Product, SaleBill, PurchaseOrder } from '../types';
 
-export const formatCurrency = (amount: number, symbol: string = '$'): string => {
-  return `${symbol}${Number(amount || 0).toLocaleString('en-US', {
+export const formatCurrency = (amount: number, symbol: string = '₹'): string => {
+  return `${symbol}${Number(amount || 0).toLocaleString('en-IN', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;

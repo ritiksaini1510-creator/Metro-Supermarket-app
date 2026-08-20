@@ -160,6 +160,18 @@ export interface StockAdjustment {
   performedBy: string;
 }
 
+export interface StoreAuthSession {
+  storeName: string;
+  phone: string;
+  address: string;
+  ownerName: string;
+  role: 'owner' | 'manager' | 'cashier';
+  gstin?: string;
+  pin?: string;
+  loggedInAt: string;
+  isLoggedIn: boolean;
+}
+
 export interface StoreSettings {
   storeName: string;
   tagline: string;
