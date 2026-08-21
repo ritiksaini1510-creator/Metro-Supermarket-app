@@ -1,1 +1,1 @@
-A Supermarket management billing app.
+# A Supermarket management billing app.
