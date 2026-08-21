@@ -25,8 +25,7 @@ import { PaymentModal } from './PaymentModal';
 import { HoldCartsModal } from './HoldCartsModal';
 import { ReceiptModal } from '../common/ReceiptModal';
 import { QuickRestockModal } from '../inventory/QuickRestockModal';
-import { SalesPeriodModal } from '../common/SalesPeriodModal';
-import { PackagePlus, TrendingUp, CheckCircle2, Hand } from 'lucide-react';
+import { PackagePlus, CheckCircle2, Hand } from 'lucide-react';
 
 const CATEGORIES: ('All' | ProductCategory)[] = [
   'All',
@@ -55,7 +54,6 @@ export const PosView: React.FC = () => {
     parkCurrentCart,
     parkedCarts,
     settings,
-    salesSummary,
   } = useStore();
 
   const [selectedCategory, setSelectedCategory] = useState<'All' | ProductCategory>('All');
@@ -67,7 +65,6 @@ export const PosView: React.FC = () => {
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [activeCustomer, setActiveCustomer] = useState({ name: '', phone: '' });
   const [restockProduct, setRestockProduct] = useState<Product | null>(null);
-  const [salesPeriodModalPeriod, setSalesPeriodModalPeriod] = useState<'today' | 'week' | 'month' | null>(null);
   const [selectedCartProductId, setSelectedCartProductId] = useState<string | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -159,57 +156,6 @@ export const PosView: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto p-3 sm:p-5 space-y-4">
-      {/* Top Sales of Day, Week, Month Quick Overview Bar */}
-      <div className="bg-slate-900 text-white rounded-2xl p-3 sm:p-3.5 border border-slate-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center space-x-2.5">
-          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
-            <TrendingUp className="w-4 h-4" />
-          </div>
-          <div>
-            <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-              Total Sales Overview
-            </h4>
-            <span className="text-[11px] text-slate-400">Click any card to inspect sales, tenders & print invoices</span>
-          </div>
-        </div>
-
-        {/* Quick Period Buttons */}
-        <div className="grid grid-cols-3 gap-2 text-xs">
-          <button
-            onClick={() => setSalesPeriodModalPeriod('today')}
-            className="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-left transition-all hover:scale-[1.02]"
-          >
-            <span className="text-[10px] text-emerald-400 font-bold block uppercase tracking-wider">Day (Today)</span>
-            <span className="text-sm font-black text-white block">
-              {formatCurrency(salesSummary.today.revenue, settings.currencySymbol)}
-            </span>
-            <span className="text-[9px] text-slate-400 font-medium">{salesSummary.today.ordersCount} sales</span>
-          </button>
-
-          <button
-            onClick={() => setSalesPeriodModalPeriod('week')}
-            className="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-left transition-all hover:scale-[1.02]"
-          >
-            <span className="text-[10px] text-indigo-400 font-bold block uppercase tracking-wider">This Week</span>
-            <span className="text-sm font-black text-white block">
-              {formatCurrency(salesSummary.week.revenue, settings.currencySymbol)}
-            </span>
-            <span className="text-[9px] text-slate-400 font-medium">{salesSummary.week.ordersCount} sales</span>
-          </button>
-
-          <button
-            onClick={() => setSalesPeriodModalPeriod('month')}
-            className="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-700/90 border border-slate-700 text-left transition-all hover:scale-[1.02]"
-          >
-            <span className="text-[10px] text-amber-400 font-bold block uppercase tracking-wider">This Month</span>
-            <span className="text-sm font-black text-white block">
-              {formatCurrency(salesSummary.month.revenue, settings.currencySymbol)}
-            </span>
-            <span className="text-[9px] text-slate-400 font-medium">{salesSummary.month.ordersCount} sales</span>
-          </button>
-        </div>
-      </div>
-
       {/* Main POS Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         
@@ -682,15 +628,6 @@ export const PosView: React.FC = () => {
         onClose={() => setRestockProduct(null)}
         product={restockProduct}
       />
-
-      {/* Sales of Day / Week / Month Explorer Modal */}
-      {salesPeriodModalPeriod && (
-        <SalesPeriodModal
-          isOpen={true}
-          onClose={() => setSalesPeriodModalPeriod(null)}
-          initialPeriod={salesPeriodModalPeriod}
-        />
-      )}
 
       {/* Payment Settlement Modal */}
       <PaymentModal

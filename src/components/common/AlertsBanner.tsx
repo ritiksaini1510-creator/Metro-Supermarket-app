@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { AlertCircle, AlertTriangle, ChevronRight, X, Sparkles, RefreshCw } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
-import { ActiveTab } from './Navbar';
+import { MainNavTab } from './AppFooter';
 
 interface AlertsBannerProps {
-  onNavigate: (tab: ActiveTab, filter?: string) => void;
+  onNavigate: (tab: MainNavTab, filter?: string) => void;
 }
 
 export const AlertsBanner: React.FC<AlertsBannerProps> = ({ onNavigate }) => {
