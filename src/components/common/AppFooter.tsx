@@ -5,6 +5,7 @@ import {
   Boxes,
   Settings,
 } from 'lucide-react';
+import { useStore } from '../../context/StoreContext';
 
 export type MainNavTab = 'pos' | 'products' | 'inventory' | 'settings';
 
@@ -17,30 +18,41 @@ export const AppFooter: React.FC<AppFooterProps> = ({
   activeTab,
   setActiveTab,
 }) => {
+  const { cartTotals, products, alerts } = useStore();
+
   const navButtons = [
     {
       id: 'pos' as MainNavTab,
-      label: '1. Create Billing',
-      shortLabel: 'Create Billing',
+      label: 'Create Billing',
+      shortLabel: 'Billing',
       icon: Receipt,
+      badge: cartTotals.itemCount > 0 ? cartTotals.itemCount : null,
+      badgeColor: 'bg-emerald-500 text-slate-950',
     },
     {
       id: 'products' as MainNavTab,
-      label: '2. Update Product',
-      shortLabel: 'Update Product',
+      label: 'Update Product',
+      shortLabel: 'Products',
       icon: PackagePlus,
+      badge: products.length > 0 ? products.length : null,
+      badgeColor: 'bg-slate-700 text-slate-200 border border-slate-600',
     },
     {
       id: 'inventory' as MainNavTab,
-      label: '3. Inventory',
+      label: 'Inventory',
       shortLabel: 'Inventory',
       icon: Boxes,
+      badge: (alerts.lowStockCount + alerts.outOfStockCount) > 0 
+        ? (alerts.lowStockCount + alerts.outOfStockCount) 
+        : null,
+      badgeColor: 'bg-amber-500 text-slate-950',
     },
     {
       id: 'settings' as MainNavTab,
-      label: '4. Setting',
+      label: 'Setting',
       shortLabel: 'Setting',
       icon: Settings,
+      badge: null,
     },
   ];
 
@@ -67,6 +79,15 @@ export const AppFooter: React.FC<AppFooterProps> = ({
             >
               <div className="relative">
                 <Icon className={`w-5 h-5 transition-transform ${isActive ? 'scale-110' : ''}`} />
+                {btn.badge !== null && (
+                  <span
+                    className={`absolute -top-1.5 -right-2.5 min-w-[17px] h-4 px-1 rounded-full text-[9px] font-black flex items-center justify-center shadow-xs ${
+                      btn.badgeColor || 'bg-emerald-500 text-slate-950'
+                    }`}
+                  >
+                    {btn.badge}
+                  </span>
+                )}
               </div>
 
               <span className="text-[11px] sm:text-xs tracking-tight whitespace-nowrap">
